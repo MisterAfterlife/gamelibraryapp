@@ -47,14 +47,38 @@ passport.use(new LocalStrategy({
 	passwordField:''
 	},
 	function(username, password, done){
-		var user = {
-			username: username,
-			password: password
-		};
-		done(null, user);
+		MongoClient.connect(url, function(err, db){
+			if(err) throw err;
+			
+			var dbObj = db.db("users");
+			
+			dbObj.collection("users").findOne({username:username}, function(err, results){
+				if(results.password === password){
+					var user = results;
+					done(null, user);
+				}
+				else{
+					done(null, false, {message:'Bad Password'});	
+				}
+			});
+		});
 }));
 
-app.get("/", function(req, res){
+function ensureAuthenticated(req, res, next){
+	if(req.isAuthenticated()){
+		next();
+	}
+	else{
+		res.redirect("/sign-in");
+	}
+};
+
+app.get("/logout", function(req, res){
+	req.logout();
+	res.redirect("/sign-in");
+});
+
+app.get("/", ensureAuthenticated, function(req, res){
 	MongoClient.connect(url, function(err,db){
 		if(err)throw err;
 		var dbObj = db.db("games");
@@ -67,7 +91,7 @@ app.get("/", function(req, res){
 	});
 });
 
-app.get("/new-entry", function(req, res){
+app.get("/new-entry", ensureAuthenticated, function(req, res){
 	res.render("new-entry");
 });
 
@@ -91,7 +115,7 @@ app.post("/new-entry", function(req, res){
 			db.close();
 			res.redirect("/");
 		});		
-	});
+});
 	
 /* 	entries.push({
 		title:req.body.title,
@@ -127,7 +151,7 @@ app.post("/sign-up",function(req, res){
 app.post("/sign-in", passport.authenticate('local', {
 	failureRedirect:'/sign-in'
 	}), function(req, res){
-		res.redirect('/profile');
+		res.redirect('/');
 });
 
 app.get('/profile', function(req, res){
